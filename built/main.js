@@ -8,12 +8,12 @@ const moment_1 = __importDefault(require("moment"));
 const fs_1 = __importDefault(require("fs"));
 const owner = "zephyrproject-rtos";
 const repo = "zephyr";
-const personalAccessToken = "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";
+const personalAccessToken = process.env.GITHUB_PERSONAL_ACCESS_TOKEN;
 const octokit = new rest_1.Octokit({ auth: personalAccessToken });
 async function listPRs() {
     try {
         const csvFile = "prs.csv";
-        const header = "PR number,open,close,days_to_close\n";
+        const header = "PR number,open,close,status,days_to_close\n";
         fs_1.default.writeFileSync(csvFile, header);
         let currentPage = 1;
         let hasNextPage = true;
@@ -39,7 +39,8 @@ async function listPRs() {
                     const duration = pr.closed_at
                         ? (0, moment_1.default)(pr.closed_at).diff((0, moment_1.default)(pr.created_at), "days", true)
                         : null;
-                    const csvRow = `${pr.number},${createdAt},${closedAt},${duration}\n`;
+                    const status = pr.merged_at ? "Merged" : pr.closed_at ? "Closed" : "Open";
+                    const csvRow = `${pr.number},${createdAt},${closedAt},${status},${duration}\n`;
                     process.stdout.write(csvRow);
                     fs_1.default.appendFileSync(csvFile, csvRow);
                 }
