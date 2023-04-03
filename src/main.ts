@@ -11,7 +11,7 @@ const octokit = new Octokit({ auth: personalAccessToken });
 async function listPRs() {
   try {
     const csvFile = "prs.csv";
-    const header = "PR number,open,close,status,days_to_close\n";
+    const header = "PR number,open,close,status,days_to_close,labels\n";
     fs.writeFileSync(csvFile, header);
 
     let currentPage = 1;
@@ -42,8 +42,9 @@ async function listPRs() {
             ? moment(pr.closed_at).diff(moment(pr.created_at), "days", true)
             : null;
           const status = pr.merged_at ? "Merged" : pr.closed_at ? "Closed" : "Open";
+          const labels = pr.labels.map((label) => label.name).join("###");
 
-            const csvRow = `${pr.number},${createdAt},${closedAt},${status},${duration}\n`;
+            const csvRow = `${pr.number},${createdAt},${closedAt},${status},${duration},${labels}\n`;
             process.stdout.write(csvRow);
             fs.appendFileSync(csvFile, csvRow);
           }
