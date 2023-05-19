@@ -4,12 +4,28 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const rest_1 = require("@octokit/rest");
+const plugin_throttling_1 = require("@octokit/plugin-throttling");
+const plugin_retry_1 = require("@octokit/plugin-retry");
 const moment_1 = __importDefault(require("moment"));
 const fs_1 = __importDefault(require("fs"));
 const owner = "zephyrproject-rtos";
 const repo = "zephyr";
-const personalAccessToken = process.env.GITHUB_PERSONAL_ACCESS_TOKEN;
-const octokit = new rest_1.Octokit({ auth: personalAccessToken });
+// get GitHub API token from environment variable
+const GITHUB_API_TOKEN = process.env.GITHUB_API_TOKEN;
+const MyOctokit = rest_1.Octokit.plugin(plugin_throttling_1.throttling, plugin_retry_1.retry);
+const octokit = new MyOctokit({
+    auth: GITHUB_API_TOKEN,
+    throttle: {
+        onSecondaryRateLimit: (retryAfter, options) => {
+            return true;
+        },
+        onRateLimit: (retryAfter, options, octokit, retryCount) => {
+            if (retryCount < 5) {
+                return true;
+            }
+        }
+    },
+});
 async function listPRs() {
     try {
         const csvFile = "prs.csv";

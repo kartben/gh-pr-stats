@@ -1,12 +1,30 @@
-import { Octokit } from "@octokit/rest";
+import { Octokit, RestEndpointMethodTypes } from '@octokit/rest';
+import { throttling } from "@octokit/plugin-throttling";
+import { retry } from "@octokit/plugin-retry";
+
 import moment from "moment";
 import fs, { writeFileSync } from "fs";
 
 const owner = "zephyrproject-rtos";
 const repo = "zephyr";
-const personalAccessToken = process.env.GITHUB_PERSONAL_ACCESS_TOKEN;
 
-const octokit = new Octokit({ auth: personalAccessToken });
+// get GitHub API token from environment variable
+const GITHUB_API_TOKEN = process.env.GITHUB_API_TOKEN;
+
+const MyOctokit = Octokit.plugin(throttling, retry);
+const octokit = new MyOctokit({
+  auth: GITHUB_API_TOKEN,
+  throttle: {
+    onSecondaryRateLimit: (retryAfter, options) => {
+      return true;
+    },
+    onRateLimit: (retryAfter, options, octokit, retryCount) => {
+      if (retryCount < 5) {
+        return true;
+      }
+    }
+  },
+});
 
 async function listPRs() {
   try {
