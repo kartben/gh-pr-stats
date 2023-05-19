@@ -31,8 +31,11 @@ async function listPRs() {
     var _a;
     try {
         const csvFile = "prs.csv";
-        const header = "PR number,open,close,status,days_to_close,author,isFirstMergedPR,labels\n";
+        const header = "PR number,PR title,open,close,status,days_to_close,author,isFirstMergedPR\n";
         fs_1.default.writeFileSync(csvFile, header);
+        const csvFilePRLabels = "pr_labels.csv";
+        const headerPRLabels = "PR number,label\n";
+        fs_1.default.writeFileSync(csvFilePRLabels, headerPRLabels);
         let currentPage = 1;
         let hasNextPage = true;
         while (hasNextPage) {
@@ -52,22 +55,23 @@ async function listPRs() {
             else {
                 for (const pr of prs) {
                     const author = (_a = pr.user) === null || _a === void 0 ? void 0 : _a.login;
-                    // use search API to figure out if it's author's first merged PR
                     let isFirstPR = false;
                     if (author && pr.merged_at && !knownAuthors.has(author)) {
-                        const query = `repo:${owner}/${repo} is:pr is:merged author:${author} closed:<=${pr.closed_at}`;
-                        try {
-                            const { status: searchStatus, data: searchResults } = await octokit.rest.search.issuesAndPullRequests({ q: query });
-                            if (searchResults.total_count === 1) {
-                                console.log(`First merged PR for ${author}: ${pr.number}`);
-                                // add author to list so that we don't search again
-                                knownAuthors.add(author);
-                                isFirstPR = true;
-                            }
-                        }
-                        catch (error) {
-                            // ignore errors (usually it's a user that doesn't exist anymore)
-                        }
+                        knownAuthors.add(author);
+                        isFirstPR = true;
+                        // const query = `repo:${owner}/${repo} is:pr is:merged author:${author} closed:<=${pr.closed_at}`;
+                        // try {
+                        //   const { status: searchStatus, data: searchResults } = await octokit.rest.search.issuesAndPullRequests({ q: query });
+                        //   if (searchResults.total_count === 1) {
+                        //     console.log(`First merged PR for ${author}: ${pr.number}`);
+                        //       // add author to list so that we don't search again
+                        //       knownAuthors.add(author);
+                        //       isFirstPR = true;
+                        //   }
+                        // }
+                        // catch (error) {
+                        //   // ignore errors (usually it's a user that doesn't exist anymore)
+                        // }
                     }
                     const createdAt = new Date(pr.created_at).toISOString();
                     const closedAt = pr.closed_at
@@ -77,8 +81,14 @@ async function listPRs() {
                         ? (0, moment_1.default)(pr.closed_at).diff((0, moment_1.default)(pr.created_at), "days", true)
                         : null;
                     const status = pr.merged_at ? "Merged" : pr.closed_at ? "Closed" : "Open";
-                    const labels = pr.labels.map((label) => label.name).join("###");
-                    const csvRow = `${pr.number},${createdAt},${closedAt},${status},${duration},${author},${isFirstPR},${labels}\n`;
+                    if (pr.labels.length > 0) {
+                        for (const label of pr.labels) {
+                            const csvRow = `${pr.number},${label.name}\n`;
+                            fs_1.default.appendFileSync(csvFilePRLabels, csvRow);
+                        }
+                    }
+                    pr.title = pr.title.replace(/"/g, '""');
+                    const csvRow = `${pr.number},"${pr.title}",${createdAt},${closedAt},${status},${duration},${author},${isFirstPR}\n`;
                     //process.stdout.write(csvRow);
                     fs_1.default.appendFileSync(csvFile, csvRow);
                 }
