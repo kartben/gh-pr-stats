@@ -26,10 +26,12 @@ const octokit = new MyOctokit({
         }
     },
 });
+let knownAuthors = new Set();
 async function listPRs() {
+    var _a;
     try {
         const csvFile = "prs.csv";
-        const header = "PR number,open,close,status,days_to_close,labels\n";
+        const header = "PR number,open,close,status,days_to_close,author,isFirstMergedPR,labels\n";
         fs_1.default.writeFileSync(csvFile, header);
         let currentPage = 1;
         let hasNextPage = true;
@@ -39,15 +41,34 @@ async function listPRs() {
                 repo,
                 state: "all",
                 per_page: 100,
+                sort: "created",
+                direction: "asc",
                 page: currentPage,
             });
             const prs = prsResponse.data;
-            //      console.log(await octokit.rateLimit.get());
             if (prs.length === 0) {
                 hasNextPage = false;
             }
             else {
                 for (const pr of prs) {
+                    const author = (_a = pr.user) === null || _a === void 0 ? void 0 : _a.login;
+                    // use search API to figure out if it's author's first merged PR
+                    let isFirstPR = false;
+                    if (author && pr.merged_at && !knownAuthors.has(author)) {
+                        const query = `repo:${owner}/${repo} is:pr is:merged author:${author} closed:<=${pr.closed_at}`;
+                        try {
+                            const { status: searchStatus, data: searchResults } = await octokit.rest.search.issuesAndPullRequests({ q: query });
+                            if (searchResults.total_count === 1) {
+                                console.log(`First merged PR for ${author}: ${pr.number}`);
+                                // add author to list so that we don't search again
+                                knownAuthors.add(author);
+                                isFirstPR = true;
+                            }
+                        }
+                        catch (error) {
+                            // ignore errors (usually it's a user that doesn't exist anymore)
+                        }
+                    }
                     const createdAt = new Date(pr.created_at).toISOString();
                     const closedAt = pr.closed_at
                         ? new Date(pr.closed_at).toISOString()
@@ -57,8 +78,8 @@ async function listPRs() {
                         : null;
                     const status = pr.merged_at ? "Merged" : pr.closed_at ? "Closed" : "Open";
                     const labels = pr.labels.map((label) => label.name).join("###");
-                    const csvRow = `${pr.number},${createdAt},${closedAt},${status},${duration},${labels}\n`;
-                    process.stdout.write(csvRow);
+                    const csvRow = `${pr.number},${createdAt},${closedAt},${status},${duration},${author},${isFirstPR},${labels}\n`;
+                    //process.stdout.write(csvRow);
                     fs_1.default.appendFileSync(csvFile, csvRow);
                 }
                 currentPage += 1;
